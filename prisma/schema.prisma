@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMINISTRADOR
+  OPERADOR_CADASTRO
+  ALMOXARIFE
+  AUDITOR
+}
+
+enum EquipmentStatus {
+  RECEBIDO
+  EM_TRIAGEM
+  AGUARDANDO_COMPONENTES
+  EM_REPARO
+  RECONDICIONADO
+  DESCARTADO
+  DOADO
+  VENDIDO
+}
+
+enum LotStatus {
+  ABERTO
+  FECHADO
+}
+
+enum MovementType {
+  RECEBIMENTO
+  TRIAGEM
+  TRANSFERENCIA
+  REPARO
+  RECONDICIONAMENTO
+  DESCARTE
+  DOACAO
+  VENDA
+  AJUSTE_ESTOQUE
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         Role
+  active       Boolean    @default(true)
+  version      Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  lots         Lot[]
+  movements    Movement[]
+}
+
+model Organization {
+  id        String      @id @default(uuid()) @db.Uuid
+  name      String
+  cnpj      String      @unique
+  type      String
+  phone     String
+  email     String
+  address   String
+  active    Boolean     @default(true)
+  version   Int         @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  contract  Contract?
+  lots      Lot[]
+  equipment Equipment[]
+}
+
+model Contract {
+  id             String       @id @default(uuid()) @db.Uuid
+  code           String       @unique
+  startDate      DateTime
+  endDate        DateTime?
+  clauses        Json?
+  active         Boolean      @default(true)
+  organizationId String       @unique @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  version        Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Lot {
+  id             String       @id @default(uuid()) @db.Uuid
+  code           String       @unique
+  origin         String
+  destination    String
+  status         LotStatus    @default(ABERTO)
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdById    String       @db.Uuid
+  createdBy      User         @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  equipment      Equipment[]
+  version        Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Equipment {
+  id              String          @id @default(uuid()) @db.Uuid
+  internalBarcode String          @unique
+  serial          String
+  category        String
+  brand           String
+  model           String
+  condition       String
+  status          EquipmentStatus @default(RECEBIDO)
+  location        String
+  notes           String          @default("")
+  recoveryValue   Decimal         @default(0) @db.Decimal(12, 2)
+  organizationId  String          @db.Uuid
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lotId           String?         @db.Uuid
+  lot             Lot?            @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  movements       Movement[]
+  version         Int             @default(0)
+  receivedAt      DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([organizationId, status])
+  @@index([lotId])
+}
+
+model Movement {
+  id           String           @id @default(uuid()) @db.Uuid
+  equipmentId  String           @db.Uuid
+  equipment    Equipment        @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+  actorId      String           @db.Uuid
+  actor        User             @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  type         MovementType
+  fromStatus   EquipmentStatus?
+  toStatus     EquipmentStatus?
+  fromLocation String?
+  toLocation   String?
+  quantity     Int              @default(1)
+  note         String           @default("")
+  version      Int              @default(0)
+  createdAt    DateTime         @default(now())
+
+  @@index([equipmentId, createdAt])
+  @@index([actorId, createdAt])
+}
